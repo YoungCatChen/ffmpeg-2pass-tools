@@ -1,0 +1,28 @@
+#!/usr/bin/env fish
+# vim: set ft=fish:
+
+function is_video -a fname
+  string match --regex --ignore-case --quiet '\.(mp4|m4v|mov|avi|webm)' $fname
+end
+
+set file $argv[1]
+
+if is_video $file
+  echo -i
+  echo $file
+  return
+end
+
+set start ( string match --regex '\d+' $file )
+set num_len ( string length $start )
+set pattern ( string replace --regex '\d+' "%0$num_len"d $file )
+
+# Individual lines for fish shell's proper substitution.
+echo -f
+echo image2
+echo -r
+echo 10
+echo -start_number
+echo $start
+echo -i
+echo $pattern
