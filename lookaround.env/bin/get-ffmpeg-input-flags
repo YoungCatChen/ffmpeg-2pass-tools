@@ -5,6 +5,49 @@ function is_video -a fname
   string match --regex --ignore-case --quiet '\.(mp4|m4v|mov|avi|webm)' $fname
 end
 
+function get_time -a fname
+  exiftool $fname -dateFormat '%s' -printFormat '$DateTimeOriginal.$SubSecTimeOriginal'
+end
+
+function guess_framerate -a argv
+  set cnt ( count $argv )
+  if [ $cnt -lt 2 ]; or not type -q exiftool
+    echo 10
+    return
+  end
+
+  set time1 ( get_time $argv[1] )
+  set time2 ( get_time $argv[-1] )
+
+  if [ $time2 -le $time1 ]
+    echo 10
+    return
+  end
+
+  set fr ( math "1000 / (($time2 - $time1) / ($cnt - 1))" )
+
+  if [ $fr -lt 6 ]
+    math "ceil($fr)"
+  else if [ $fr -lt 7 ]
+    echo 6
+  else if [ $fr -lt 9 ]
+    echo 8
+  else if [ $fr -lt 11 ]
+    echo 10
+  else if [ $fr -lt 13.5 ]
+    echo 12
+  else if [ $fr -lt 17.5 ]
+    echo 15
+  else if [ $fr -lt 25 ]
+    echo 20
+  else if [ $fr -lt 45 ]
+    echo 30
+  else
+    echo 60
+  end
+end
+
+
 set file $argv[1]
 
 if is_video $file
@@ -16,12 +59,13 @@ end
 set start ( string match --regex '\d+' $file )
 set num_len ( string length $start )
 set pattern ( string replace --regex '\d+' "%0$num_len"d $file )
+set framerate ( guess_framerate $argv )
 
 # Individual lines for fish shell's proper substitution.
 echo -f
 echo image2
 echo -r
-echo 10
+echo $framerate
 echo -start_number
 echo $start
 echo -i
