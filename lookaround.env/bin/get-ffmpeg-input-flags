@@ -24,7 +24,7 @@ function guess_framerate -a argv
     return
   end
 
-  set fr ( math "1000 / (($time2 - $time1) / ($cnt - 1))" )
+  set fr ( math "1.0 / (($time2 - $time1) / ($cnt - 1))" )
 
   if [ $fr -lt 6 ]
     math "ceil($fr)"
