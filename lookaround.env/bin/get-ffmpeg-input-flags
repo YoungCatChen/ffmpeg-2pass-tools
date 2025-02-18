@@ -1,12 +1,90 @@
 #!/usr/bin/env fish
 # vim: set ft=fish:
 
+
+function main -a argv
+  set cnt ( count $argv )
+  if [ $cnt -lt 1 ]
+    return 1
+  end
+
+  set file $argv[1]
+  if is_video $file
+    echo -- -i
+    echo -- $file
+    return
+  end
+
+  set space ( guess_colorspace $file )
+  print_colorspace_for_input $space
+
+  if [ $cnt -lt 2 ]
+    echo -- -i
+    echo -- $file
+  else
+    process_multiple_image_inputs_using_framerate $argv
+    # process_multiple_image_inputs_using_concat $argv
+  end
+
+  print_colorspace_for_output $space
+end
+
+
 function is_video -a fname
   string match --regex --ignore-case --quiet '\.(mp4|m4v|mov|avi|webm)' $fname
 end
 
-function get_time -a fname
-  exiftool $fname -dateFormat '%s' -printFormat '$DateTimeOriginal.$SubSecTimeOriginal'
+function guess_colorspace -a fname
+  if not type -q exiftool
+    echo unknown
+    return
+  end
+
+  set profile_desc ( exiftool $fname -q -printFormat '$ProfileDescription' )
+
+  if string match -q --entire sRGB $profile_desc
+    echo sRGB
+  else if string match -q --entire P3 $profile_desc
+    echo P3
+  else
+    echo unknown
+  end
+end
+
+function print_colorspace_for_input -a space
+  if [ $space = 'sRGB' -o $space = 'P3' ]
+    echo -- -colorspace
+    echo -- bt709
+    echo -- -color_primaries
+    [ $space = 'sRGB' ] && echo bt709 || echo smpte432
+    echo -- -color_trc
+    echo -- iec61966-2-1
+  end
+end
+
+function print_colorspace_for_output -a space
+  if [ $space = 'sRGB' -o $space = 'P3' ]
+    echo -- -colorspace
+    echo -- bt709
+  end
+end
+
+
+function process_multiple_image_inputs_using_framerate -a argv
+  set file $argv[1]
+  string match --quiet --regex '(?<start>\d+)(?<rest>[^\d]+)$' $file
+  set num_len ( string length $start )
+  set pattern ( string replace "$start$rest" "%0$num_len""d$rest" $file )
+  set framerate ( guess_framerate $argv )
+
+  echo -- -f
+  echo -- image2
+  echo -- -r
+  echo -- $framerate
+  echo -- -start_number
+  echo -- $start
+  echo -- -i
+  echo -- $pattern
 end
 
 function guess_framerate -a argv
@@ -47,26 +125,38 @@ function guess_framerate -a argv
   end
 end
 
-
-set file $argv[1]
-
-if is_video $file
-  echo -i
-  echo $file
-  return
+function get_time -a fname
+  exiftool $fname -dateFormat '%s' -printFormat '$DateTimeOriginal.$SubSecTimeOriginal'
 end
 
-set start ( string match --regex '\d+' $file )
-set num_len ( string length $start )
-set pattern ( string replace --regex '\d+' "%0$num_len"d $file )
-set framerate ( guess_framerate $argv )
+function process_multiple_image_inputs_using_concat -a argv
+  set tmp /tmp/get-ffmpeg-input-flags.$fish_pid.tmp
 
-# Individual lines for fish shell's proper substitution.
-echo -f
-echo image2
-echo -r
-echo $framerate
-echo -start_number
-echo $start
-echo -i
-echo $pattern
+  exiftool -q -dateFormat '%s' -printFormat \
+    '$FilePath /// $DateTimeOriginal.$SubSecTimeOriginal' $argv |
+    gawk -F ' /// ' '
+      {
+        if (last_time) {
+          last_duration = $2 - last_time;
+          if (last_duration <= 0) { last_duration = 1/60; }
+          print "duration " last_duration;
+        }
+        print "file \'" $1 "\'";
+        last_time = $2;
+      }
+      END {
+        print "duration " last_duration;
+        print "file \'" $1 "\'";
+      }
+    ' > $tmp
+
+  echo -- -f
+  echo -- concat
+  echo -- -safe
+  echo -- 0
+  echo -- -i
+  echo -- $tmp
+end
+
+
+main $argv
