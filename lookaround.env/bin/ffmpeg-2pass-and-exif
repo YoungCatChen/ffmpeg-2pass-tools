@@ -116,7 +116,7 @@ class ExecCmd:
     self.dry_run = dry_run
 
   def run(self, cmd: Sequence[str]) -> int:
-    print('\n\033[1;32m' + ' '.join(cmd) + '\033[0m')
+    print('\n\033[1;36m' + ' '.join(cmd) + '\033[0m')
     if not self.dry_run:
       try:
         result = subprocess.run(cmd)
@@ -173,10 +173,12 @@ def main():
   cmd = ['nice', 'ffmpeg', '-nostdin', '-hide_banner'] + cp.args
 
   if encoder == 'libx264':
-    execcmd.run(cmd + '-an -pass 1 -f null /dev/null'.split(' '))
+    execcmd.run(cmd + '-map -0 -map 0:v -pass 1 -f null /dev/null'.split(' '))
     execcmd.run(cmd + ['-pass', '2', output_path])
   else:
-    execcmd.run(cmd + '-an -x265-params pass=1 -f null /dev/null'.split(' '))
+    execcmd.run(
+        cmd +
+        '-map -0 -map 0:v -x265-params pass=1 -f null /dev/null'.split(' '))
     execcmd.run(cmd + ['-x265-params', 'pass=2', output_path])
 
   execcmd.run(['exiftool', '-tagsFromFile', input,
