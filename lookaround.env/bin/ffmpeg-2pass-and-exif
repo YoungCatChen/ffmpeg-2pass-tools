@@ -170,18 +170,21 @@ def main():
 
   # run the commands.
   execcmd = ExecCmd(dry_run)
-  cmd = ['nice', 'ffmpeg', '-nostdin', '-hide_banner'] + cp.args
+  os.nice(10)
+  cmd = ['ffmpeg', '-nostdin', '-hide_banner'] + cp.args
 
   if encoder == 'libx264':
-    execcmd.run(cmd + '-map -0 -map 0:v -pass 1 -f null /dev/null'.split(' '))
+    execcmd.run(cmd + '-map -0? -map 0:v -pass 1 -f null /dev/null'.split(' '))
     execcmd.run(cmd + ['-pass', '2', output_path])
   else:
     execcmd.run(
         cmd +
-        '-map -0 -map 0:v -x265-params pass=1 -f null /dev/null'.split(' '))
+        '-map -0? -map 0:v -x265-params pass=1 -f null /dev/null'.split(' '))
     execcmd.run(cmd + ['-x265-params', 'pass=2', output_path])
 
   execcmd.run(['exiftool', '-tagsFromFile', input,
                '-overwrite_original', output_path])
 
-main()
+
+if __name__ == '__main__':
+  main()
