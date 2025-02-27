@@ -4,9 +4,9 @@ import dataclasses
 import glob
 import os
 import re
-import subprocess
 import sys
-from typing import Sequence
+
+import execute_command
 
 
 @dataclasses.dataclass
@@ -22,10 +22,10 @@ class CommandProcessor:
   def __init__(self) -> None:
     self.args = sys.argv[1:]
 
-  def find_arg_after(self,
-                     regex: str | re.Pattern,
-                     backwards=False) -> PositionedArgument | None:
-    """Finds the argument immediately after a specific regex."""
+  def find_arg_position(self,
+                        regex: str | re.Pattern,
+                        backwards=False) -> int | None:
+    """Finds the position of an argument that matches a specific regex."""
     if isinstance(regex, str):
       regex = re.compile(regex)
     rang = range(len(self.args) - 1)
@@ -33,8 +33,17 @@ class CommandProcessor:
       rang = range(len(self.args) - 2, -1, -1)
     for i in rang:
       if regex.fullmatch(self.args[i]):
-        return PositionedArgument(val=self.args[i + 1], pos=i + 1)
+        return i
     return None
+
+  def find_arg_after(self,
+                     regex: str | re.Pattern,
+                     backwards=False) -> PositionedArgument | None:
+    """Finds the argument immediately after a specific regex."""
+    pos = self.find_arg_position(regex, backwards)
+    if pos is None:
+      return None
+    return PositionedArgument(val=self.args[pos + 1], pos=pos + 1)
 
   def find_bitrate(self) -> str | None:
     """Finds the bitrate for video from the command line arguments."""
@@ -110,23 +119,6 @@ class CommandProcessor:
     return i_arg.val
 
 
-class ExecCmd:
-  """Prints and runs a command."""
-
-  def __init__(self, dry_run=False):
-    self.dry_run = dry_run
-
-  def run(self, cmd: Sequence[str]) -> None:
-    print('\n\033[1;36m' + ' '.join(cmd) + '\033[0m')
-    if not self.dry_run:
-      try:
-        result = subprocess.run(cmd)
-      except KeyboardInterrupt:
-        exit(130)
-      if result.returncode != 0:
-        exit(result.returncode)
-
-
 def main():
   cp = CommandProcessor()
   input = cp.find_input()
@@ -170,7 +162,7 @@ def main():
   output_path += '.' + output_format
 
   # run the commands.
-  execcmd = ExecCmd(dry_run)
+  execcmd = execute_command.ExecCmd(dry_run)
   os.nice(10)
   cmd = ['ffmpeg', '-nostdin', '-hide_banner'] + cp.args
 
