@@ -1,0 +1,11 @@
+{
+  "[python]": {
+    "editor.defaultFormatter": "eeyore.yapf"
+  },
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "python.analysis.typeCheckingMode": "standard",
+  "yapf.args": [
+    "--style={based_on_style: google, indent_width=2}"
+  ]
+}

@@ -22,12 +22,11 @@ class CommandProcessor:
   def __init__(self) -> None:
     self.args = sys.argv[1:]
 
-  def find_arg_after(
-      self,
-      regex: str|re.Pattern,
-      backwards = False) -> PositionedArgument|None:
+  def find_arg_after(self,
+                     regex: str | re.Pattern,
+                     backwards=False) -> PositionedArgument | None:
     """Finds the argument immediately after a specific regex."""
-    if type(regex) is str:
+    if isinstance(regex, str):
       regex = re.compile(regex)
     rang = range(len(self.args) - 1)
     if backwards:
@@ -37,17 +36,17 @@ class CommandProcessor:
         return PositionedArgument(val=self.args[i + 1], pos=i + 1)
     return None
 
-  def find_bitrate(self) -> str|None:
+  def find_bitrate(self) -> str | None:
     """Finds the bitrate for video from the command line arguments."""
     bv_arg = self.find_arg_after('-b:v')
     return bv_arg.val if bv_arg else None
 
-  def find_encoder(self) -> str|None:
+  def find_encoder(self) -> str | None:
     """Finds the encoder for video from the command line arguments."""
     cv_arg = self.find_arg_after('-c:v')
     return cv_arg.val if cv_arg else None
 
-  def find_output_format(self) -> str|None:
+  def find_output_format(self) -> str | None:
     """Finds the output file format from the command line arguments."""
     f_arg = self.find_arg_after('-f', backwards=True)
     i_arg = self.find_arg_after('-i')
@@ -55,7 +54,7 @@ class CommandProcessor:
       return f_arg.val
     return None
 
-  def find_output(self) -> str|None:
+  def find_output(self) -> str | None:
     """Finds the output file from the command line arguments.
 
     It works if the output ends with .mp4 or .mov; mistakes can occur if there
@@ -67,7 +66,7 @@ class CommandProcessor:
         return self.args[i] if self.args[i - 1] != '-i' else None
     return None
 
-  def find_input(self) -> str|None:
+  def find_input(self) -> str | None:
     """Finds the input file after the `-i` argument.
 
     If the input file is a media file, it will return the file name directly.
@@ -85,9 +84,11 @@ class CommandProcessor:
     if '%' in i_arg.val:
       # now this is a printf pattern. Convert it into a glob pattern.
       regex = r'%(\d+)d'
+
       def replace_match(match):
         width = int(match.group(1))
         return '?' * width
+
       glob_pattern = re.sub(regex, replace_match, i_arg.val)
 
       # find all files and return the last one.
@@ -115,7 +116,7 @@ class ExecCmd:
   def __init__(self, dry_run=False):
     self.dry_run = dry_run
 
-  def run(self, cmd: Sequence[str]) -> int:
+  def run(self, cmd: Sequence[str]) -> None:
     print('\n\033[1;36m' + ' '.join(cmd) + '\033[0m')
     if not self.dry_run:
       try:
@@ -182,8 +183,8 @@ def main():
         '-map -0? -map 0:v -x265-params pass=1 -f null /dev/null'.split(' '))
     execcmd.run(cmd + ['-x265-params', 'pass=2', output_path])
 
-  execcmd.run(['exiftool', '-tagsFromFile', input,
-               '-overwrite_original', output_path])
+  execcmd.run(
+      ['exiftool', '-tagsFromFile', input, '-overwrite_original', output_path])
 
 
 if __name__ == '__main__':
