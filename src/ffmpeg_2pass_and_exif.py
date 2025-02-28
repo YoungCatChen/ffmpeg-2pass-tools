@@ -5,8 +5,9 @@ import glob
 import os
 import re
 import sys
+from typing import Iterable
 
-import execute_command
+import highlight
 
 
 @dataclasses.dataclass
@@ -19,8 +20,8 @@ class CommandProcessor:
   """Processes the command line arguments for ffmpeg."""
   args: list[str]
 
-  def __init__(self) -> None:
-    self.args = sys.argv[1:]
+  def __init__(self, args: Iterable[str] | None = None) -> None:
+    self.args = list(args) if args else sys.argv[1:]
 
   def find_arg_position(self,
                         regex: str | re.Pattern,
@@ -75,7 +76,7 @@ class CommandProcessor:
         return self.args[i] if self.args[i - 1] != '-i' else None
     return None
 
-  def find_input(self) -> str | None:
+  def find_one_input(self) -> str | None:
     """Finds the input file after the `-i` argument.
 
     If the input file is a media file, it will return the file name directly.
@@ -119,51 +120,61 @@ class CommandProcessor:
     return i_arg.val
 
 
-def main():
-  cp = CommandProcessor()
-  input = cp.find_input()
+class CommandlineArgumentError(Exception):
+  pass
+
+
+@dataclasses.dataclass
+class Result:
+  bitrate: str | None
+  encoder: str
+  output_path: str
+
+
+def ffmpeg_2pass_and_exif(args: Iterable[str] | None = None,
+                          execcmd: highlight.ExecCmd | None = None) -> Result:
+  execcmd = execcmd or highlight.ExecCmd()
+  cp = CommandProcessor(args)
+  one_input = cp.find_one_input()
   output_spec = cp.find_output()
   output_format = cp.find_output_format() or 'mp4'
   bitrate = cp.find_bitrate()
   encoder = cp.find_encoder()
-  dry_run = '-n' in cp.args
 
   # checks.
-  if not input:
-    sys.stderr.write('Cannot find input file/pattern after an `-i` argument. ' +
-                     'Exiting.\n')
-    exit(1)
+  if not one_input:
+    raise CommandlineArgumentError(
+        'Cannot find input file/pattern after an `-i` argument.')
 
   if output_spec:
-    sys.stderr.write(f'Output file `{output_spec}` is detected from the ' +
-                     'arguments. The output file name will be determined by ' +
-                     'input file and bitrate etc. and must not be specified ' +
-                     'manually. Exiting.\n')
-    exit(1)
+    raise CommandlineArgumentError(
+        f'Output file `{output_spec}` is detected from the '
+        'arguments. The output file name will be determined by '
+        'input file and bitrate etc. and must not be specified '
+        'manually.')
 
   if encoder not in ['libx264', 'libx265']:
-    sys.stderr.write('Cannot find video encoder after an `-c:v` argument, or ' +
-                     'the encoder specified is not either libx264 or ' +
-                     'libx265. Exiting.\n')
-    exit(1)
+    raise CommandlineArgumentError(
+        'Cannot find video encoder after an `-c:v` argument, or '
+        'the encoder specified is not either libx264 or '
+        'libx265.')
 
   if encoder == 'libx265':
     tag_arg = cp.find_arg_after('-tag:v')
     if not tag_arg or tag_arg.val != 'hvc1':
-      sys.stderr.write('libx265 is specified as video encoder but ' +
-                       '`-tag:v hvc1` is not specified. The resulting video ' +
-                       'will have issue in playing. Exiting.\n')
-      exit(1)
+      raise CommandlineArgumentError(
+          'libx265 is specified as video encoder but '
+          '`-tag:v hvc1` is not specified. The resulting video '
+          'will have issue in playing.')
 
   # assemble the output path.
-  output_path = os.path.splitext(input)[0] + '.' + encoder.replace('lib', '')
+  output_path = os.path.splitext(one_input)[0] + '.' + encoder.replace(
+      'lib', '')
   if bitrate:
     output_path += f'.{bitrate}bps'
   output_path += '.' + output_format
 
   # run the commands.
-  execcmd = execute_command.ExecCmd(dry_run)
-  os.nice(10)
   cmd = ['ffmpeg', '-nostdin', '-hide_banner'] + cp.args
 
   if encoder == 'libx264':
@@ -175,9 +186,22 @@ def main():
         '-map -0? -map 0:v -x265-params pass=1 -f null /dev/null'.split(' '))
     execcmd.run(cmd + ['-x265-params', 'pass=2', output_path])
 
-  execcmd.run(
-      ['exiftool', '-tagsFromFile', input, '-overwrite_original', output_path])
+  execcmd.run([
+      'exiftool', '-tagsFromFile', one_input, '-overwrite_original', output_path
+  ])
+
+  return Result(bitrate=bitrate, encoder=encoder, output_path=output_path)
+
+
+def main() -> int:
+  dry_run = '-n' in sys.argv
+  try:
+    ffmpeg_2pass_and_exif(sys.argv[1:], execcmd=highlight.ExecCmd(dry_run))
+    return 0
+  except CommandlineArgumentError as e:
+    sys.stderr.write(f'Error: {e}\nExiting.\n')
+    return 2
 
 
 if __name__ == '__main__':
-  main()
+  sys.exit(main())

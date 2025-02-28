@@ -1,5 +1,20 @@
+import builtins
 import subprocess
 from typing import Sequence
+
+
+def print(*args, **kwargs) -> None:
+  """Prints the arguments in cyan."""
+  builtins.print('\033[1;36m', end='')
+  builtins.print(*args, **kwargs, end='')
+  builtins.print('\033[m')
+
+
+def warn(*args, **kwargs) -> None:
+  """Prints the arguments in red."""
+  builtins.print('\033[1;31m', end='')
+  builtins.print(*args, **kwargs, end='')
+  builtins.print('\033[m')
 
 
 class ExecCmd:
@@ -9,7 +24,8 @@ class ExecCmd:
     self.dry_run = dry_run
 
   def run(self, cmd: Sequence[str]) -> None:
-    print('\n\033[1;36m' + ' '.join(cmd) + '\033[0m')
+    builtins.print()
+    print(*cmd)
     if not self.dry_run:
       try:
         result = subprocess.run(cmd)

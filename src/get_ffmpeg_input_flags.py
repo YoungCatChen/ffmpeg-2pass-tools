@@ -30,16 +30,20 @@ class ColorSpace(enum.Enum):
     return cls.UNKNOWN
 
 
-def print_colorspace_for_input(space: ColorSpace) -> None:
-  if space in {ColorSpace.SRGB, ColorSpace.P3}:
-    print('-colorspace\nbt709\n-color_primaries')
-    print('bt709' if space == ColorSpace.SRGB else 'smpte432')
-    print('-color_trc\niec61966-2-1')
+def get_colorspace_flags_for_input(space: ColorSpace) -> list[str]:
+  if space not in {ColorSpace.SRGB, ColorSpace.P3}:
+    return []
+  flags = ['-colorspace', 'bt709', '-color_primaries']
+  flags.append('bt709' if space == ColorSpace.SRGB else 'smpte432')
+  flags += ['-color_trc', 'iec61966-2-1']
+  return flags
 
 
-def print_colorspace_for_output(space: ColorSpace) -> None:
+def get_colorspace_flags_for_output(space: ColorSpace) -> list[str]:
   if space in {ColorSpace.SRGB, ColorSpace.P3}:
-    print('-colorspace\nbt709')
+    return ['-colorspace', 'bt709']
+  else:
+    return []
 
 
 def get_time(fname: str) -> float:
@@ -84,19 +88,25 @@ def guess_framerate(files: Sequence[str]) -> int:
   return 60
 
 
-def process_multiple_image_inputs_using_framerate(files: Sequence[str]) -> None:
+def get_flags_for_multiple_image_inputs_using_framerate(
+    files: Sequence[str]) -> list[str]:
   file = files[0]
   matches = re.findall(r'(\d\d+)(\D+)$', file)
   if not matches:
-    return
+    return []
   start, rest = matches[0]
   num_len = len(start)
   pattern = file.replace(start + rest, f'%0{num_len}d{rest}')
   framerate = guess_framerate(files)
-  print(f'-f\nimage2\n-r\n{framerate}\n-start_number\n{start}\n-i\n{pattern}')
+  return [
+      '-f', 'image2', '-r',
+      str(framerate), '-start_number',
+      str(start), '-i', pattern
+  ]
 
 
-def process_multiple_image_inputs_using_concat(argv: Sequence[str]) -> None:
+def get_flags_for_multiple_image_inputs_using_concat(
+    argv: Sequence[str]) -> list[str]:
   result = exiftool_helper.execute(
       '-q', '-dateFormat', '%s', '-printFormat',
       '$FilePath /// $DateTimeOriginal.$SubSecTimeOriginal', *argv)
@@ -133,34 +143,36 @@ def process_multiple_image_inputs_using_concat(argv: Sequence[str]) -> None:
       tmp_file.write(f"duration {last_duration}\n")
       tmp_file.write(f"file '{file_path}'\n")
 
-  print("-f")
-  print("concat")
-  print("-safe")
-  print("0")
-  print("-i")
-  print(tmp_path)
+  return ["-f", "concat", "-safe", "0", "-i", tmp_path]
 
 
 def is_video(fname: str) -> bool:
   return bool(re.search(r'\.(mp4|m4v|mov|avi|webm)$', fname, re.IGNORECASE))
 
 
-def main(argv: Sequence[str]) -> int:
-  files = argv[1:]
+def get_ffmpeg_input_flags(files: Sequence[str]) -> list[str]:
   if not files:
-    return 1
+    raise ValueError('No input files.')
   if is_video(files[0]):
-    print('-i\n' + files[0])
-    return 0
+    return ['-i', files[0]]
 
   space = ColorSpace.guess(files[0])
-  print_colorspace_for_input(space)
+  flags = get_colorspace_flags_for_input(space)
   if len(files) == 1:
-    print('-i\n' + files[0])
+    flags += ['-i', files[0]]
   else:
-    process_multiple_image_inputs_using_framerate(files)
-    # process_multiple_image_inputs_using_concat(files)
-  print_colorspace_for_output(space)
+    flags += get_flags_for_multiple_image_inputs_using_framerate(files)
+    # flags += process_multiple_image_inputs_using_concat(files)
+  flags += get_colorspace_flags_for_output(space)
+  return flags
+
+
+def main(argv: Sequence[str]) -> int:
+  files = argv[1:]
+  flags = get_ffmpeg_input_flags(files)
+  if not flags:
+    return 2
+  print('\n'.join(flags))
   return 0
 
 
