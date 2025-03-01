@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
 import enum
-import exiftool
 import re
 import sys
 import tempfile
 from typing import Sequence
 
-exiftool_helper = exiftool.ExifToolHelper(common_args=[])
+import exiftool_utils
 
 
 class ColorSpace(enum.Enum):
@@ -18,8 +17,8 @@ class ColorSpace(enum.Enum):
   @classmethod
   def guess(cls, fname: str) -> 'ColorSpace':
     try:
-      result = exiftool_helper.execute('-q', '-printFormat',
-                                       '$ProfileDescription', fname)
+      result = exiftool_utils.singleton().execute('-q', '-printFormat',
+                                                '$ProfileDescription', fname)
       result = str(result)
       if 'sRGB' in result:
         return cls.SRGB
@@ -46,20 +45,13 @@ def get_colorspace_flags_for_output(space: ColorSpace) -> list[str]:
     return []
 
 
-def get_time(fname: str) -> float:
-  result = exiftool_helper.execute(fname, '-dateFormat', '%s', '-printFormat',
-                                   '$DateTimeOriginal.$SubSecTimeOriginal')
-  result = result.strip()
-  return float(result) if result else 0.0
-
-
 def guess_framerate(files: Sequence[str]) -> int:
   if len(files) < 2:
     return 10
 
   try:
-    time1 = get_time(files[0])
-    time2 = get_time(files[-1])
+    time1 = exiftool_utils.get_time(files[0])
+    time2 = exiftool_utils.get_time(files[-1])
   except:
     return 10
   if time2 <= time1:
@@ -107,7 +99,7 @@ def get_flags_for_multiple_image_inputs_using_framerate(
 
 def get_flags_for_multiple_image_inputs_using_concat(
     argv: Sequence[str]) -> list[str]:
-  result = exiftool_helper.execute(
+  result = exiftool_utils.singleton().execute(
       '-q', '-dateFormat', '%s', '-printFormat',
       '$FilePath /// $DateTimeOriginal.$SubSecTimeOriginal', *argv)
 

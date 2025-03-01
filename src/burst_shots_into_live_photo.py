@@ -1,11 +1,13 @@
 import argparse
 import dataclasses
 import gooey
+import itertools
 import os
 import re
 import sys
-from typing import Callable, Collection, Iterable, Sequence, cast
+from typing import Callable, Iterable, cast
 
+import exiftool_utils
 import ffmpeg_2pass_and_exif
 import get_ffmpeg_input_flags
 import highlight
@@ -23,30 +25,22 @@ def main() -> int:
     print('Error: Some files are in both bursts and stills:', intersection)
     return 2
   highlight.print(
-      f'\nSpecified {len(bursts)} burst shots and {len(stills)} still images.')
+      f'Specified {len(bursts)} burst shots and {len(stills)} still images.')
 
-  execcmd = highlight.ExecCmd(dry_run=args.dry_run)
+  # Find burst series
   burst_series = BurstSeries.find_all_series(ImageFile(b) for b in bursts)
   highlight.print('\nFound %d burst series. They are: ' % len(burst_series))
   for series in burst_series:
     print(f'{series.path_pattern} - {len(series.images)} images '
           f'({series.first_seq} - {series.last_seq})')
+
+  # Make videos
+  execcmd = highlight.ExecCmd(dry_run=args.dry_run)
   for series in burst_series:
     series.make_video(args.ffargs, execcmd=execcmd)
 
-  still_dict: dict[int, list[str]] = {}
-  for still in stills:
-    img = ImageFile(still)
-    still_dict.setdefault(img.sequence_num, []).append(still)
-
-  for series in burst_series:
-    for burst_image in series.images:
-      for still_image in still_dict.get(burst_image.sequence_num, []):
-        highlight.print(
-            f'\nAttaching {series.video} (from burst shots '
-            f'{series.first_seq} - {series.last_seq}) to {still_image} ...')
-        # TODO
-        pass
+  # Attach videos to stills
+  attach_videos_to_stills(burst_series, stills, execcmd=execcmd)
 
   return 0
 
@@ -134,6 +128,9 @@ class ImageFile:
   path: str
   """The path to the image file."""
 
+  time: float
+  """The time of the image file taken in seconds since the epoch."""
+
   sequence_num: int
   """The sequence number from the filename.
 
@@ -152,20 +149,31 @@ class ImageFile:
 
   def __init__(self, path: str):
     self.path = path
+    self.time = exiftool_utils.get_time(path)
+    self.sequence_num, self.path_pattern = self.get_sequence_and_pattern(path)
+
+  @staticmethod
+  def get_sequence_and_pattern(path: str) -> tuple[int, str]:
     matched = re.search(r'(\d{3,})', os.path.basename(path))
     if matched:
       matched_str = matched.group(1)
-      self.sequence_num = int(matched_str)
-      self.path_pattern = os.path.join(
+      return int(matched_str), os.path.join(
           os.path.dirname(path),
           os.path.basename(path).replace(matched_str, '*'))
-    else:
-      self.sequence_num = -1
-      self.path_pattern = path
+    return -1, path
 
 
 @dataclasses.dataclass
 class BurstSeries:
+  """A series of burst shots.
+
+  Images taken in burst mode are usually named in sequence, and they are considered
+  as a series of burst shots.
+
+  Images that are taken more than 1 second apart, even when their filenames
+  are in sequence, are considered as different series.
+  """
+
   images: list[ImageFile]
   video: str | None = None
 
@@ -185,24 +193,28 @@ class BurstSeries:
     return self.images[-1].sequence_num
 
   @staticmethod
-  def find_all_series(images: Iterable[ImageFile]) -> list['BurstSeries']:
+  def find_all_series(images: Iterable[ImageFile],
+                      min_num_images: int = 4) -> list['BurstSeries']:
     """Finds all burst series from the given images.
 
-    Only series with 4 or more images will be returned.
+    Only series with `min_num_images` or more images will be returned.
     """
-    images = sorted(images, key=lambda x: (x.path_pattern, x.sequence_num))
     all_series: list[BurstSeries] = []
-    for i, img in enumerate(images):
-      if (i == 0 or img.path_pattern != images[i - 1].path_pattern or
-          img.sequence_num != images[i - 1].sequence_num + 1):
-        all_series.append(BurstSeries([img]))
-      else:
-        all_series[-1].images.append(img)
-    return [series for series in all_series if len(series.images) >= 4]
+    images_by_pattern = itertools.groupby(images, key=lambda x: x.path_pattern)
 
-  def make_video(self,
-                 ffmpeg_args: Iterable[str],
-                 execcmd: highlight.ExecCmd | None = None) -> None:
+    for unused_pattern, image_iter in images_by_pattern:
+      images = sorted(image_iter, key=lambda x: x.sequence_num)
+      for i, img in enumerate(images):
+        if (i == 0 or img.sequence_num != images[i - 1].sequence_num + 1 or
+            img.time - images[i - 1].time > 1.0):
+          all_series.append(BurstSeries([img]))
+        else:
+          all_series[-1].images.append(img)
+
+    return [s for s in all_series if len(s.images) >= min_num_images]
+
+  def make_video(self, ffmpeg_args: Iterable[str],
+                 execcmd: highlight.ExecCmd) -> None:
     """Converts the images in this burst series to a video."""
     highlight.print(f'\nConverting {self.path_pattern} '
                     f'({len(self.images)} images) to a video...')
@@ -211,6 +223,25 @@ class BurstSeries:
     result = ffmpeg_2pass_and_exif.ffmpeg_2pass_and_exif(
         (input_flags + list(ffmpeg_args)), execcmd=execcmd)
     self.video = result.output_path
+
+
+def attach_videos_to_stills(burst_series: Iterable[BurstSeries],
+                            stills: Iterable[str],
+                            execcmd: highlight.ExecCmd) -> None:
+  """Attaches videos to still images to make Live Photos."""
+  still_dict: dict[int, list[str]] = {}
+  for still in stills:
+    seq_num, _ = ImageFile.get_sequence_and_pattern(still)
+    still_dict.setdefault(seq_num, []).append(still)
+
+  for series in burst_series:
+    for burst_image in series.images:
+      for still_path in still_dict.get(burst_image.sequence_num, []):
+        highlight.print(
+            f'\nAttaching {series.video} (from burst shots '
+            f'{series.first_seq} - {series.last_seq}) to {still_path} ...')
+        # TODO
+        pass
 
 
 if __name__ == '__main__':
