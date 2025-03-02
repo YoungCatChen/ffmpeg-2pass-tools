@@ -3,14 +3,13 @@ import dataclasses
 import gooey
 import itertools
 import os
-import re
 import sys
 from typing import Callable, Iterable, cast
 
-import exiftool_utils
 import ffmpeg_2pass_and_exif
 import get_ffmpeg_input_flags
 import highlight
+import image_file
 
 
 def main() -> int:
@@ -28,7 +27,7 @@ def main() -> int:
       f'Specified {len(bursts)} burst shots and {len(stills)} still images.')
 
   # Find burst series
-  burst_series = BurstSeries.find_all_series(ImageFile(b) for b in bursts)
+  burst_series = BurstSeries.find_all_series(image_file.ImageFile(b) for b in bursts)
   highlight.print('\nFound %d burst series. They are: ' % len(burst_series))
   for series in burst_series:
     print(f'{series.path_pattern} - {len(series.images)} images '
@@ -124,45 +123,6 @@ def scan_for_image_files(paths: Iterable[str]) -> list[str]:
   return files
 
 
-class ImageFile:
-  path: str
-  """The path to the image file."""
-
-  time: float
-  """The time of the image file taken in seconds since the epoch."""
-
-  sequence_num: int
-  """The sequence number from the filename.
-
-  The last number that has 3+ digits are considered as the sequence number.
-  e.g. IMG_123.jpg's sequence number is 123, and IMG_123-1.jpg's is still 123.
-  Any number from the directory name is not considered as the sequence number.
-  e.g. /path/to/456/IMG_123.jpg's sequence number is 123, not 456.
-  If no sequence is found, it's set to -1.
-  """
-
-  path_pattern: str
-  """The glob pattern of the path, excluding the sequence number.
-
-  e.g. /path/to/456/IMG_123.jpg's path_pattern is /path/to/456/IMG_*.jpg.
-  """
-
-  def __init__(self, path: str):
-    self.path = path
-    self.time = exiftool_utils.get_time(path)
-    self.sequence_num, self.path_pattern = self.get_sequence_and_pattern(path)
-
-  @staticmethod
-  def get_sequence_and_pattern(path: str) -> tuple[int, str]:
-    matched = re.search(r'(\d{3,})', os.path.basename(path))
-    if matched:
-      matched_str = matched.group(1)
-      return int(matched_str), os.path.join(
-          os.path.dirname(path),
-          os.path.basename(path).replace(matched_str, '*'))
-    return -1, path
-
-
 @dataclasses.dataclass
 class BurstSeries:
   """A series of burst shots.
@@ -174,7 +134,7 @@ class BurstSeries:
   are in sequence, are considered as different series.
   """
 
-  images: list[ImageFile]
+  images: list[image_file.ImageFile]
   video: str | None = None
 
   @property
@@ -193,7 +153,7 @@ class BurstSeries:
     return self.images[-1].sequence_num
 
   @staticmethod
-  def find_all_series(images: Iterable[ImageFile],
+  def find_all_series(images: Iterable[image_file.ImageFile],
                       min_num_images: int = 4) -> list['BurstSeries']:
     """Finds all burst series from the given images.
 
@@ -231,7 +191,7 @@ def attach_videos_to_stills(burst_series: Iterable[BurstSeries],
   """Attaches videos to still images to make Live Photos."""
   still_dict: dict[int, list[str]] = {}
   for still in stills:
-    seq_num, _ = ImageFile.get_sequence_and_pattern(still)
+    seq_num, _ = image_file.ImageFile.get_sequence_and_pattern(still)
     still_dict.setdefault(seq_num, []).append(still)
 
   for series in burst_series:
