@@ -1,0 +1,3 @@
+[submodule "third_party/MotionPhoto2"]
+	path = third_party/MotionPhoto2
+	url = git@github.com:YoungCatChen/MotionPhoto2.git
