@@ -1,7 +1,7 @@
 import os
 import re
 
-import exiftool_utils
+from ffmpeg_2pass_tools import exiftool_utils
 
 
 class ImageFile:

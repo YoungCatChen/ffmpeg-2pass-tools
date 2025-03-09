@@ -7,7 +7,7 @@ import re
 import sys
 from typing import Iterable
 
-import highlight
+from ffmpeg_2pass_tools import highlight
 
 
 @dataclasses.dataclass

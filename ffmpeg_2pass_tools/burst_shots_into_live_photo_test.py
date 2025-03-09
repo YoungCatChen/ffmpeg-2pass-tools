@@ -1,7 +1,7 @@
 import unittest
 
-import burst_shots_into_live_photo
-import image_file
+from ffmpeg_2pass_tools import burst_shots_into_live_photo
+from ffmpeg_2pass_tools import image_file
 
 
 class BurstSeriesTest(unittest.TestCase):

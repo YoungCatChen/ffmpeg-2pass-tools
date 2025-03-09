@@ -4,15 +4,19 @@ import gooey
 import itertools
 import os
 import sys
-from typing import Callable, Iterable, cast
+from typing import Iterable
 
-import ffmpeg_2pass_and_exif
-import get_ffmpeg_input_flags
-import highlight
-import image_file
+# from ffmpeg_2pass_tools.third_party.MotionPhoto2 import Muxer as muxer
+
+from ffmpeg_2pass_tools import ffmpeg_2pass_and_exif
+from ffmpeg_2pass_tools import get_ffmpeg_input_flags
+from ffmpeg_2pass_tools import highlight
+from ffmpeg_2pass_tools import image_file
 
 
 def main() -> int:
+  # muxer.Muxer()
+  # exit(100)
   args = parse_args()
   bursts = scan_for_image_files(args.bursts)
   stills = scan_for_image_files(args.stills)
@@ -27,7 +31,8 @@ def main() -> int:
       f'Specified {len(bursts)} burst shots and {len(stills)} still images.')
 
   # Find burst series
-  burst_series = BurstSeries.find_all_series(image_file.ImageFile(b) for b in bursts)
+  burst_series = BurstSeries.find_all_series(
+      image_file.ImageFile(b) for b in bursts)
   highlight.print('\nFound %d burst series. They are: ' % len(burst_series))
   for series in burst_series:
     print(f'{series.path_pattern} - {len(series.images)} images '
@@ -42,6 +47,15 @@ def main() -> int:
   attach_videos_to_stills(burst_series, stills, execcmd=execcmd)
 
   return 0
+
+
+@gooey.Gooey(
+    program_name='Burst Shots onto Live Photo',
+    optional_cols=1,
+    show_restart_button=False,
+)
+def gooey_main() -> int:
+  return main()
 
 
 @dataclasses.dataclass
@@ -206,15 +220,11 @@ def attach_videos_to_stills(burst_series: Iterable[BurstSeries],
 
 if __name__ == '__main__':
   if len(sys.argv) == 1:
-    main2 = gooey.Gooey(
-        program_name='Burst Shots onto Live Photo',
-        optional_cols=1,
-        show_restart_button=False,
-    )(main)
-    main = cast(Callable[[], int], main2)
+    sys.exit(gooey_main())
+
   # Gooey reruns the script with this parameter for the actual execution.
-  # Since we don't use decorator to enable commandline use, remove this parameter
-  # and just run the main when in commandline mode.
+  # Since we don't use decorator here to enable commandline use, remove this
+  # parameter and just run the main when in commandline mode.
   if '--ignore-gooey' in sys.argv:
     sys.argv.remove('--ignore-gooey')
   sys.exit(main())

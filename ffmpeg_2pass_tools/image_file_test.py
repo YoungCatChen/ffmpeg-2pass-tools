@@ -1,7 +1,7 @@
 from parameterized import parameterized
 import unittest
 
-import image_file
+from ffmpeg_2pass_tools import image_file
 
 
 class ImageFileTest(unittest.TestCase):

@@ -6,8 +6,8 @@ import sys
 import tempfile
 from typing import IO, Sequence
 
-import exiftool_utils
-import image_file
+from ffmpeg_2pass_tools import exiftool_utils
+from ffmpeg_2pass_tools import image_file
 
 
 class ColorSpace(enum.Enum):

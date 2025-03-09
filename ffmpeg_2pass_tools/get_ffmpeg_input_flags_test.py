@@ -5,8 +5,8 @@ from typing import Sequence
 import unittest
 from unittest import mock
 
-import exiftool_utils
-import get_ffmpeg_input_flags
+from ffmpeg_2pass_tools import exiftool_utils
+from ffmpeg_2pass_tools import get_ffmpeg_input_flags
 
 
 class TestImage2Input(get_ffmpeg_input_flags.Image2Input):
