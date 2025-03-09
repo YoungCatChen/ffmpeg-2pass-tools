@@ -6,7 +6,8 @@ import os
 import sys
 from typing import Iterable
 
-# from ffmpeg_2pass_tools.third_party.MotionPhoto2 import Muxer as muxer
+import ffmpeg_2pass_tools.third_party as _
+from MotionPhoto2 import Muxer as muxer
 
 from ffmpeg_2pass_tools import ffmpeg_2pass_and_exif
 from ffmpeg_2pass_tools import get_ffmpeg_input_flags
@@ -15,8 +16,6 @@ from ffmpeg_2pass_tools import image_file
 
 
 def main() -> int:
-  # muxer.Muxer()
-  # exit(100)
   args = parse_args()
   bursts = scan_for_image_files(args.bursts)
   stills = scan_for_image_files(args.stills)
@@ -214,7 +213,8 @@ def attach_videos_to_stills(burst_series: Iterable[BurstSeries],
         highlight.print(
             f'\nAttaching {series.video} (from burst shots '
             f'{series.first_seq} - {series.last_seq}) to {still_path} ...')
-        # TODO
+        # TODO: use this muxer to attach video to still image.
+        # muxer.Muxer()
         pass
 
 
