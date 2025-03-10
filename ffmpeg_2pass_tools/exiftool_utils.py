@@ -1,6 +1,8 @@
+import atexit
 import exiftool
 
 _exiftool_helper = exiftool.ExifToolHelper(common_args=[])
+atexit.register(_exiftool_helper.terminate)
 
 
 def singleton() -> exiftool.ExifToolHelper:
