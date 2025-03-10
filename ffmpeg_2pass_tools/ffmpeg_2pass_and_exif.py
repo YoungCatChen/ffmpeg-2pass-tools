@@ -56,6 +56,11 @@ class CommandProcessor:
     cv_arg = self.find_arg_after('-c:v')
     return cv_arg.val if cv_arg else None
 
+  def find_x265_params(self) -> str | None:
+    """Finds the encoder for video from the command line arguments."""
+    arg = self.find_arg_after('-x265-params')
+    return arg.val if arg else None
+
   def find_output_format(self) -> str | None:
     """Finds the output file format from the command line arguments."""
     f_arg = self.find_arg_after('-f', backwards=True)
@@ -181,10 +186,12 @@ def ffmpeg_2pass_and_exif(args: Iterable[str] | None = None,
     execcmd.run(cmd + '-map -0? -map 0:v -pass 1 -f null /dev/null'.split(' '))
     execcmd.run(cmd + ['-pass', '2', output_path])
   else:
+    x265_params = cp.find_x265_params() or ''
     execcmd.run(
         cmd +
-        '-map -0? -map 0:v -x265-params pass=1 -f null /dev/null'.split(' '))
-    execcmd.run(cmd + ['-x265-params', 'pass=2', output_path])
+        f'-map -0? -map 0:v -x265-params pass=1:{x265_params} -f null /dev/null'
+        .split(' '))
+    execcmd.run(cmd + ['-x265-params', f'pass=2:{x265_params}', output_path])
 
   execcmd.run([
       'exiftool', '-tagsFromFile', one_input, '-overwrite_original', output_path
