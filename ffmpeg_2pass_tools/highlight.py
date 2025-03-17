@@ -26,10 +26,11 @@ class ExecCmd:
   def run(self, cmd: Sequence[str]) -> None:
     builtins.print()
     print(*cmd)
-    if not self.dry_run:
-      try:
-        result = subprocess.run(cmd)
-      except KeyboardInterrupt:
-        exit(130)
-      if result.returncode != 0:
-        exit(result.returncode)
+    if self.dry_run:
+      return
+    try:
+      result = subprocess.run(cmd)
+    except KeyboardInterrupt:
+      exit(130)
+    if result.returncode != 0:
+      exit(result.returncode)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import dataclasses
 import enum
 import re
 import sys
@@ -161,14 +162,21 @@ def is_video(fname: str) -> bool:
   return bool(re.search(r'\.(mp4|m4v|mov|avi|webm)$', fname, re.IGNORECASE))
 
 
-def get_ffmpeg_input_flags(files: Sequence[str]) -> list[str]:
+@dataclasses.dataclass
+class FlagsAndSettings:
+  flags: list[str]
+  settings: Image2Input|ConcatInput|None = None
+
+
+def get_ffmpeg_input_flags(files: Sequence[str]) -> FlagsAndSettings:
   if not files:
     raise ValueError('No input files.')
   if is_video(files[0]):
-    return ['-i', files[0]]
+    return FlagsAndSettings(['-i', files[0]])
 
   space = ColorSpace.guess(files[0])
   flags = space.flags_for_input
+  input_settings = None
   if len(files) == 1:
     flags += ['-i', files[0]]
   else:
@@ -176,12 +184,12 @@ def get_ffmpeg_input_flags(files: Sequence[str]) -> list[str]:
     # input_settings = ConcatInput(files)
     flags += input_settings.flags
   flags += space.flags_for_output
-  return flags
+  return FlagsAndSettings(flags, input_settings)
 
 
 def main(argv: Sequence[str]) -> int:
   files = argv[1:]
-  flags = get_ffmpeg_input_flags(files)
+  flags = get_ffmpeg_input_flags(files).flags
   if not flags:
     return 2
   print('\n'.join(flags))

@@ -95,34 +95,58 @@ class CommandProcessor:
     i_arg = self.find_arg_after('-i')
     if not i_arg:
       return None
-
-    if '%' in i_arg.val:
-      # now this is a printf pattern. Convert it into a glob pattern.
-      regex = r'%(\d+)d'
-
-      def replace_match(match):
-        width = int(match.group(1))
-        return '?' * width
-
-      glob_pattern = re.sub(regex, replace_match, i_arg.val)
-
-      # find all files and return the last one.
-      files = glob.glob(glob_pattern)
-      files.sort()
-      return files[-1] if files else None
-
-    f_arg = self.find_arg_after('-f', backwards=True)
+    f_arg = self.find_arg_after('-f')
+    if f_arg and f_arg.val == 'image2':
+      if one_input := self._find_one_input_from_image2(i_arg.val):
+        return one_input
     if f_arg and f_arg.val == 'concat':
-      # this is a text file used by the `-f concat` option. Read the list.
-      with open(i_arg.val, 'rt') as f:
-        lines = f.readlines()
-      for i in range(len(lines) - 1, -1, -1):
-        matches = re.findall("file '(.+)'", lines[i])
-        if matches:
-          return matches[0]
-
-    # Otherwise, assume this is a media file. Return it as-is.
+      if one_input := self._find_one_input_from_concat(i_arg.val):
+        return one_input
     return i_arg.val
+
+  def _find_one_input_from_image2(self, printf_pattern: str) -> str | None:
+    """Finds the last file that matches a printf pattern.
+
+    If the input specification looks like a printf pattern with a `%`, for
+    example `ABC%2d.jpg`, it will find the **last** file that matches
+    `ABC??.jpg`, but not pass `-frames:v` frames (if specified).
+    """
+    start_number = self._find_start_number(printf_pattern)
+    print('start_number: ', start_number)
+    if start_number is None:
+      return None
+    max_frames = 1_000_000
+    if arg:= self.find_arg_after('-frames:v'):
+      max_frames = int(arg.val)
+    num = -1
+    for num in range(start_number, start_number + max_frames):
+      path = printf_pattern % num
+      if not os.path.exists(path):
+        num -= 1
+        break
+    return printf_pattern % num
+
+  def _find_start_number(self, printf_pattern: str) -> int | None:
+    """Finds the start number for a printf pattern."""
+    attempts = [0, 1, 2, 3, 4]
+    if arg := self.find_arg_after('-start_number'):
+      attempts.insert(0, int(arg.val))
+    for num in attempts:
+      path_attempt = printf_pattern % num
+      if os.path.exists(path_attempt):
+        return num
+    return None
+
+  @staticmethod
+  def _find_one_input_from_concat(playlist_path: str) -> str | None:
+    """Finds the last video file in a playlist file."""
+    with open(playlist_path, 'rt') as f:
+      lines = f.readlines()
+    for i in range(len(lines) - 1, -1, -1):
+      matches = re.findall("file '(.+)'", lines[i])
+      if matches:
+        return matches[0]
+    return None
 
 
 class CommandlineArgumentError(Exception):

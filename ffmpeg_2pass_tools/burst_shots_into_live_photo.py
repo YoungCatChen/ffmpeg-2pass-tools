@@ -1,5 +1,6 @@
 import argparse
 import dataclasses
+from re import I
 import gooey
 import itertools
 import os
@@ -7,9 +8,10 @@ import sys
 from typing import Iterable
 
 import ffmpeg_2pass_tools.third_party as _
-from MotionPhoto2 import Muxer as muxer
+from MotionPhoto2 import Muxer as muxer_lib
 
 from ffmpeg_2pass_tools import ffmpeg_2pass_and_exif
+from ffmpeg_2pass_tools import exiftool_utils
 from ffmpeg_2pass_tools import get_ffmpeg_input_flags
 from ffmpeg_2pass_tools import highlight
 from ffmpeg_2pass_tools import image_file
@@ -29,9 +31,11 @@ def main() -> int:
   highlight.print(
       f'Specified {len(bursts)} burst shots and {len(stills)} still images.')
 
+  burst_images = [image_file.ImageFile(b) for b in bursts]
+  still_images = [image_file.ImageFile(s) for s in stills]
+
   # Find burst series
-  burst_series = BurstSeries.find_all_series(
-      image_file.ImageFile(b) for b in bursts)
+  burst_series = BurstSeries.find_all_series(burst_images)
   highlight.print('\nFound %d burst series. They are: ' % len(burst_series))
   for series in burst_series:
     print(f'{series.path_pattern} - {len(series.images)} images '
@@ -43,7 +47,7 @@ def main() -> int:
     series.make_video(args.ffargs, execcmd=execcmd)
 
   # Attach videos to stills
-  attach_videos_to_stills(burst_series, stills, execcmd=execcmd)
+  attach_videos_to_stills(burst_series, still_images, dry_run=args.dry_run)
 
   return 0
 
@@ -149,6 +153,7 @@ class BurstSeries:
 
   images: list[image_file.ImageFile]
   video: str | None = None
+  video_input_settings: object | None = None
 
   @property
   def path_pattern(self) -> str:
@@ -191,31 +196,57 @@ class BurstSeries:
     """Converts the images in this burst series to a video."""
     highlight.print(f'\nConverting {self.path_pattern} '
                     f'({len(self.images)} images) to a video...')
-    input_flags = get_ffmpeg_input_flags.get_ffmpeg_input_flags(
+    input_flags_and_settings = get_ffmpeg_input_flags.get_ffmpeg_input_flags(
         [img.path for img in self.images])
-    result = ffmpeg_2pass_and_exif.ffmpeg_2pass_and_exif(
-        (input_flags + list(ffmpeg_args)), execcmd=execcmd)
+    all_flags = input_flags_and_settings.flags + list(ffmpeg_args)
+    result = ffmpeg_2pass_and_exif.ffmpeg_2pass_and_exif(all_flags,
+                                                         execcmd=execcmd)
     self.video = result.output_path
+    self.video_input_settings = input_flags_and_settings.settings
 
 
 def attach_videos_to_stills(burst_series: Iterable[BurstSeries],
-                            stills: Iterable[str],
-                            execcmd: highlight.ExecCmd) -> None:
+                            stills: Iterable[image_file.ImageFile],
+                            dry_run=False) -> None:
   """Attaches videos to still images to make Live Photos."""
-  still_dict: dict[int, list[str]] = {}
+  still_dict: dict[int, list[image_file.ImageFile]] = {}
   for still in stills:
-    seq_num, _ = image_file.ImageFile.get_sequence_and_pattern(still)
-    still_dict.setdefault(seq_num, []).append(still)
-
+    still_dict.setdefault(still.sequence_num, []).append(still)
   for series in burst_series:
     for burst_image in series.images:
-      for still_path in still_dict.get(burst_image.sequence_num, []):
-        highlight.print(
-            f'\nAttaching {series.video} (from burst shots '
-            f'{series.first_seq} - {series.last_seq}) to {still_path} ...')
-        # TODO: use this muxer to attach video to still image.
-        # muxer.Muxer()
-        pass
+      for still in still_dict.get(burst_image.sequence_num, []):
+        attach_video_to_still(series, still, dry_run=dry_run)
+
+
+def attach_video_to_still(series: BurstSeries,
+                          still: image_file.ImageFile,
+                          dry_run=False) -> None:
+  """Attaches a video to a still image to make a single Live Photo."""
+  highlight.print(
+      f'\nAttaching {series.video} (from burst shots '
+      f'{series.first_seq} - {series.last_seq}) to {still.path} ...')
+
+  assert series.video
+  time_offset_sec = 0.0
+
+  if isinstance(series.video_input_settings,
+                get_ffmpeg_input_flags.Image2Input):
+    image2_input = series.video_input_settings
+    time_offset_sec = ((still.sequence_num - series.first_seq + 0.5) /
+                       image2_input.framerate)
+    time_offset_sec = max(0.0, time_offset_sec)
+
+  print(f"Live photo's time offset: {time_offset_sec} sec")
+  if dry_run:
+    return
+
+  muxer = muxer_lib.Muxer(
+      image_fpath=still.path,
+      video_fpath=series.video,
+      exiftool=exiftool_utils.singleton(),
+      time_offset_sec=time_offset_sec,
+  )
+  muxer.mux()
 
 
 if __name__ == '__main__':
