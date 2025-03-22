@@ -1,3 +1,0 @@
-#!/bin/sh
-PYTHONPATH=$PYTHONPATH:"$( dirname "$0" )" \
-exec python3 -m ffmpeg_2pass_tools.get_ffmpeg_input_flags "$@"

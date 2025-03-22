@@ -1,0 +1,35 @@
+# Build: python -m build
+# Upload to PyPI: python -m twine upload dist/*
+
+[build-system]
+requires = ["build", "hatchling", "twine"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ffmpeg-2pass-tools"
+version = "0.1.0"
+description = "A collection of tools for working with FFmpeg, including two-pass encoding and EXIF data handling"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+authors = [
+    { name = "YoungCatChen", email = "YoungCatChen@users.noreply.github.com" }
+]
+dependencies = [
+    "Gooey",
+    "PyExifTool",
+    "lxml",
+]
+
+[project.optional-dependencies]
+test = [
+    "parameterized",
+]
+
+[project.scripts]
+burst-shots-into-live-photo = "ffmpeg_2pass_tools.burst_shots_into_live_photo:main"
+ffmpeg-2pass-and-exif = "ffmpeg_2pass_tools.ffmpeg_2pass_and_exif:main"
+get-ffmpeg-input-flags = "ffmpeg_2pass_tools.get_ffmpeg_input_flags:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ffmpeg_2pass_tools"]

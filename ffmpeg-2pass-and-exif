@@ -1,3 +1,0 @@
-#!/bin/sh
-PYTHONPATH=$PYTHONPATH:"$( dirname "$0" )" \
-exec python3 -m ffmpeg_2pass_tools.ffmpeg_2pass_and_exif "$@"
