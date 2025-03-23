@@ -1,13 +1,19 @@
-# Build: python -m build
-# Upload to PyPI: python -m twine upload dist/*
+# Linux:
+#   Install deps:   pip3 install build twine
+#   Build:          rm dist/*; python3 -m build
+#   Upload to PyPI: python3 -m twine upload dist/*
+# MacOS with HomeBrew:
+#   Install deps:   pipx install build && brew install twine
+#   Build:          rm dist/*; pipx run build
+#   Upload to PyPI: twine upload dist/*
 
 [build-system]
-requires = ["build", "hatchling", "twine"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "ffmpeg-2pass-tools"
-version = "0.1.0"
+version = "0.1.2"
 description = "A collection of tools for working with FFmpeg, including two-pass encoding and EXIF data handling"
 readme = "README.md"
 requires-python = ">=3.7"

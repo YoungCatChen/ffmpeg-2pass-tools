@@ -18,6 +18,18 @@ from ffmpeg_2pass_tools import image_file
 
 
 def main() -> int:
+  if len(sys.argv) == 1:
+    return gooey_main()
+
+  # Gooey reruns the script with this parameter for the actual execution.
+  # Since we don't use decorator here to enable commandline use, remove this
+  # parameter and just run the main when in commandline mode.
+  if '--ignore-gooey' in sys.argv:
+    sys.argv.remove('--ignore-gooey')
+  return normal_main()
+
+
+def normal_main() -> int:
   args = parse_args()
   bursts = scan_for_image_files(args.bursts)
   stills = scan_for_image_files(args.stills)
@@ -58,7 +70,7 @@ def main() -> int:
     show_restart_button=False,
 )
 def gooey_main() -> int:
-  return main()
+  return normal_main()
 
 
 @dataclasses.dataclass
@@ -250,12 +262,4 @@ def attach_video_to_still(series: BurstSeries,
 
 
 if __name__ == '__main__':
-  if len(sys.argv) == 1:
-    sys.exit(gooey_main())
-
-  # Gooey reruns the script with this parameter for the actual execution.
-  # Since we don't use decorator here to enable commandline use, remove this
-  # parameter and just run the main when in commandline mode.
-  if '--ignore-gooey' in sys.argv:
-    sys.argv.remove('--ignore-gooey')
   sys.exit(main())

@@ -187,8 +187,8 @@ def get_ffmpeg_input_flags(files: Sequence[str]) -> FlagsAndSettings:
   return FlagsAndSettings(flags, input_settings)
 
 
-def main(argv: Sequence[str]) -> int:
-  files = argv[1:]
+def main() -> int:
+  files = sys.argv[1:]
   flags = get_ffmpeg_input_flags(files).flags
   if not flags:
     return 2
@@ -197,4 +197,4 @@ def main(argv: Sequence[str]) -> int:
 
 
 if __name__ == '__main__':
-  sys.exit(main(sys.argv))
+  sys.exit(main())
